@@ -76,8 +76,36 @@ public class Rasterizer {
         }
 
 
-        EdgeBucket cur, next;
-        for(int i=ymin; ymin <= ymax; i++){
+        EdgeBucket first, last;
+        int xStart, xEnd;
+        ActiveEdgeList ael = new ActiveEdgeList();
+        for(int scanLine=ymin; scanLine <= ymax; scanLine++){
+            ael.add(eTable.getFirstEB(scanLine));
+            ael.removePassedEdges(scanLine);
+            ael.sort();
+            for(int j = 0; j < ael.size()-1; j += 2){
+                first = ael.get(j);
+                last = ael.get(j+1);
+
+                xStart = first.getXinit();
+                if(first.getSum() > 0 && first.isNegative() == false){
+                    xStart++;
+                }
+
+                xEnd = last.getXinit();
+                if(last.getSum() > 0 && last.isNegative() == true){
+                    xEnd --;
+                }
+
+                for (int xPix = xStart; xPix < xEnd; xPix++){
+                    C.setPixel(xPix,scanLine);
+                }
+
+                first.updateSumAndX();
+                last.updateSumAndX();
+
+
+            }
 
         }
 
@@ -135,23 +163,40 @@ public class Rasterizer {
             }
         }
 
-        public void sort(){
+        public void removePassedEdges(int y){
+            for(int i = 0; i< list.size(); i++){
+                if(list.get(i).getYmax() <= y){
+                    list.remove(i);
+                    i--;
+                }
+            }
+        }
 
+        public void sort(){
+            Collections.sort(list, new EdgeBucketComparator());
+        }
+
+        public EdgeBucket get(int index){
+            return list.get(index);
+        }
+
+        public int size(){
+            return list.size();
         }
 
     }
 
     class EdgeTable{
         protected EdgeBucket[] table;
-        protected int ymax;
+        protected int ymin;
 
         public EdgeTable(int ymax, int ymin){
-            table = new EdgeBucket[ymax-ymin];
-            this.ymax = ymax;
+            table = new EdgeBucket[1+ymax-ymin];
+            this.ymin = ymin;
         }
 
         public void addEdgeBucket(EdgeBucket e){
-            int tIndex = ymax - e.getFirtscan();
+            int tIndex = e.getFirtscan()- ymin;
             if(table[tIndex] == null){
                 table[tIndex] = e;
             }
@@ -163,7 +208,7 @@ public class Rasterizer {
         }
 
         public EdgeBucket getFirstEB(int y){
-            int tIndex = ymax - y;
+            int tIndex = y - ymin;
             return table[tIndex];
         }
     }
@@ -187,6 +232,20 @@ public class Rasterizer {
             this.dx =dx;
             this.dy = dy;
             this.sum = 0;
+        }
+
+        public void updateSumAndX(){
+            sum += dx;
+            if(dx != 0 && sum > dy){
+                while (sum > dy){
+                    sum -=dy;
+                    if(isNegative){
+                        xinit--;
+                    }else{
+                        xinit++;
+                    }
+                }
+            }
         }
 
         public int getSum() {
@@ -265,7 +324,10 @@ public class Rasterizer {
                 x2 = o2.getXinit();
                 return x1.compareTo(x2);
             }
-            return 0; //TODO: compare based on 1/m
+
+            Float mInv1 = ((float)o1.getDx()/(float)o1.getDy());
+            Float mInv2 = ((float)o2.getDx()/(float)o2.getDy());
+            return mInv1.compareTo(mInv2);
         }
     }
     
